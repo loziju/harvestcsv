@@ -1,0 +1,7 @@
+name = AAA harvester from csv file
+description = Provide csv endpoint support for DKAN harvest.
+core = 7.x
+version = 7.x-1.0
+
+dependencies[] = dkan_harvest
+files[] = aaa_harvest.migrate.inc

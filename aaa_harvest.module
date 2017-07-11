@@ -1,0 +1,74 @@
+<?php
+
+/**
+ * @file
+ * Module file for aaa_harvest.
+ */
+
+/**
+ * Implements hook_harvest_source_types().
+ */
+function aaa_harvest_harvest_source_types() {
+  return array(
+    'aaadata_csv' => array(
+      'machine_name' => 'aaadata_csv',
+      'label' => 'AAA csv file import',
+      'cache callback' => 'aaa_harvest_csv_cache',
+      'migration class' => 'AaaCsvMigration',
+    ),
+  );
+}
+
+/**
+ * Cache csv endpoint. Convert csv into associative json files.
+ *
+ * @param HarvestSource $source
+ *        The source object from a datajson endpoint to cache.
+ * @param int $harvest_updatetime
+ *        Last harvest update time.
+ *
+ * @return HarvestCache
+ *         A harvest cache object.
+ */
+function aaa_harvest_csv_cache(HarvestSource $source, $harvest_updatetime) {
+  $harvest_cache = new HarvestCache($source, $harvest_updatetime);
+  // Make sure the cache directory is cleared for all cases.
+  $cache_dir = $source->getCacheDir(TRUE);
+
+  // Get the csv file and convert it into array.
+  $csv_file = drupal_realpath($source->uri);
+
+  $rows = array();
+  $file = fopen($csv_file, "r");
+  while (!feof($file)) {
+    $rows[] = (fgetcsv($file));
+  }
+  fclose($file);
+
+  // Extract the header.
+  $header = array_shift($rows);
+
+  foreach ($rows as $row) {
+    // Skip empty row.
+    if (!$row) continue;
+    // Convert array to object and json.
+    $dataset = array_combine($header, $row);
+    $dataset = (object)$dataset;
+    $dataset_json = json_encode($dataset);
+
+    // Write json into file.
+    $identifier = $dataset->UniqueID;
+    $dataset_file = implode('/', array($source->getCacheDir(), $identifier));
+    $cached = @file_put_contents($dataset_file, utf8_encode($dataset_json));
+
+    // Set harvest flag accordingly and return it.
+    if (!$cached) {
+      $harvest_cache->setCacheEntryFailed($identifier, $dataset->Title);
+    }
+    else {
+      $harvest_cache->setCacheEntryProcessed($identifier, $dataset->Title);
+    }
+  }
+
+  return $harvest_cache;
+}
